@@ -1,4 +1,3 @@
-
 <!doctype html>
 
 <html>
@@ -13,153 +12,29 @@
 
   <style>
 
-    body {
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 18px; background: #111; color: #eee; }
 
-      font-family: system-ui, sans-serif;
+    .header { text-align: center; margin-bottom: 16px; }
 
-      margin: 0;
+    .header img { width: 80px; height: 80px; }
 
-      padding: 18px;
+    .header h2 { margin: 8px 0 4px 0; color: #00e5ff; }
 
-      background: #111;
+    .small { opacity: .7; font-size: 14px; }
 
-      color: #eee;
+    button { font-size: 22px; padding: 14px 18px; width: 100%; border: 2px solid #00e5ff; border-radius: 10px; background: #222; color: #00e5ff; cursor: pointer; }
 
-    }
+    button:disabled { opacity: 0.5; cursor: default; }
 
-    .header {
+    .idle-msg { text-align: center; margin-top: 24px; padding: 20px; border: 1px solid #333; border-radius: 10px; background: #1a1a1a; color: #888; font-size: 16px; }
 
-      text-align: center;
+    .now-playing { text-align: center; margin-top: 16px; padding: 14px; border: 1px solid #00e5ff; border-radius: 10px; background: #0a1a1f; font-size: 18px; color: #00e5ff; }
 
-      margin-bottom: 16px;
+    .debug-toggle { margin-top: 16px; font-size: 13px; opacity: 0.5; }
 
-    }
+    .debug-toggle label { cursor: pointer; }
 
-    .header img {
-
-      width: 80px;
-
-      height: 80px;
-
-    }
-
-    .header h2 {
-
-      margin: 8px 0 4px 0;
-
-      color: #00e5ff;
-
-    }
-
-    .small {
-
-      opacity: .7;
-
-      font-size: 14px;
-
-    }
-
-    button {
-
-      font-size: 22px;
-
-      padding: 14px 18px;
-
-      width: 100%;
-
-      border: 2px solid #00e5ff;
-
-      border-radius: 10px;
-
-      background: #222;
-
-      color: #00e5ff;
-
-      cursor: pointer;
-
-    }
-
-    button:disabled {
-
-      opacity: 0.5;
-
-      cursor: default;
-
-    }
-
-    .idle-msg {
-
-      text-align: center;
-
-      margin-top: 24px;
-
-      padding: 20px;
-
-      border: 1px solid #333;
-
-      border-radius: 10px;
-
-      background: #1a1a1a;
-
-      color: #888;
-
-      font-size: 16px;
-
-    }
-
-    .now-playing {
-
-      text-align: center;
-
-      margin-top: 16px;
-
-      padding: 14px;
-
-      border: 1px solid #00e5ff;
-
-      border-radius: 10px;
-
-      background: #0a1a1f;
-
-      font-size: 18px;
-
-      color: #00e5ff;
-
-    }
-
-    .debug-toggle {
-
-      margin-top: 16px;
-
-      font-size: 13px;
-
-      opacity: 0.5;
-
-    }
-
-    .debug-toggle label {
-
-      cursor: pointer;
-
-    }
-
-    .box {
-
-      margin-top: 8px;
-
-      padding: 12px;
-
-      border: 1px solid #333;
-
-      border-radius: 10px;
-
-      background: #1a1a1a;
-
-      font-size: 13px;
-
-      color: #aaa;
-
-    }
+    .box { margin-top: 8px; padding: 12px; border: 1px solid #333; border-radius: 10px; background: #1a1a1a; font-size: 13px; color: #aaa; }
 
     .box b { color: #ccc; }
 
@@ -185,23 +60,58 @@
 
   <button id="enableBtn">Enable Audio</button>
 
-  <div id="idleMsg" class="idle-msg">
+  <div id="idleMsg" class="idle-msg">No show is currently broadcasting.</div>
 
-    No show is currently broadcasting.
-
-  </div>
-
-  <div id="nowPlaying" class="now-playing hidden">
-
-    &#9835; Now Playing: <span id="trackName">-</span>
-
-  </div>
+  <div id="nowPlaying" class="now-playing hidden">&#9835; Now Playing: <span id="trackName">-</span></div>
 
   <div class="err" id="fetchErr"></div>
 
   <div class="err" id="playErr"></div>
 
-  <div class="debug-toggle">
+  <div class="debug-toggle"><label><input type="checkbox" id="debugCheck" /> Show Debug Data</label></div>
 
-    <label><input type="checkbox" id="debugCheck" /> Show Debug Data</lab
+  <div id="debugBox" class="box hidden">
 
+    <div><b>Poll:</b> <span id="poll">not started</span></div>
+
+    <div><b>Sequence:</b> <span id="seq">-</span></div>
+
+    <div><b>State:</b> <span id="state">-</span></div>
+
+    <div><b>Target:</b> <span id="target">-</span> ms</div>
+
+    <div><b>Local:</b> <span id="local">-</span> ms</div>
+
+    <div><b>Error:</b> <span id="err">-</span> ms</div>
+
+  </div>
+
+  <audio id="audio" preload="auto" playsinline></audio>
+
+<script>
+
+const enableBtn=document.getElementById('enableBtn'),audio=document.getElementById('audio'),idleMsg=document.getElementById('idleMsg'),nowPlaying=document.getElementById('nowPlaying'),trackName=document.getElementById('trackName'),pollEl=document.getElementById('poll'),fetchErrEl=document.getElementById('fetchErr'),playErrEl=document.getElementById('playErr'),seqEl=document.getElementById('seq'),stateEl=document.getElementById('state'),targetEl=document.getElementById('target'),localEl=document.getElementById('local'),errEl=document.getElementById('err'),debugCheck=document.getElementById('debugCheck'),debugBox=document.getElementById('debugBox');
+
+let enabled=false,currentBase="",pollTimer=null,haveMetadata=false;
+
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+debugCheck.addEventListener('change',()=>{debugBox.classList.toggle('hidden',!debugCheck.checked);});
+
+audio.addEventListener('loadedmetadata',()=>{haveMetadata=true;});
+
+audio.addEventListener('error',()=>{playErrEl.textContent="Audio element error (bad URL or decode problem).";});
+
+enableBtn.onclick=()=>{enabled=true;enableBtn.disabled=true;enableBtn.textContent="Audio Enabled";pollEl.textContent="POLLING...";if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(pollOnce,250);pollOnce();try{audio.muted=true;const p=audio.play();if(p&&typeof p.then==='function'){p.then(()=>{audio.pause();audio.currentTime=0;audio.muted=false;}).catch((e)=>{audio.muted=false;playErrEl.textContent="Audio unlock blocked: "+(e?.message||e);});}else{audio.muted=false;}}catch(e){audio.muted=false;playErrEl.textContent="Audio unlock error: "+(e?.message||e);}};
+
+async function pollOnce(){if(!enabled)return;const t0=Date.now();try{const url=`${location.origin}/listen/status.php?ts=${Date.now()}`;const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);const msg=await r.json();pollEl.textContent=`ok (${Date.now()-t0} ms)`;fetchErrEl.textContent="";sync(msg);}catch(e){pollEl.textContent="FAILED";fetchErrEl.textContent="Fetch error: "+(e?.message||e);}}
+
+async function safePlay(){try{const p=audio.play();if(p&&typeof p.catch==='function'){await p;}playErrEl.textContent="";}catch(e){playErrEl.textContent="Play blocked: "+(e?.message||e);}}
+
+async function sync(msg){seqEl.textContent=msg.base||"-";stateEl.textContent=msg.state||"-";targetEl.textContent=msg.pos_ms??"-";if(msg.state==="stop"||!msg.base){idleMsg.classList.remove('hidden');nowPlaying.classList.add('hidden');}else{idleMsg.classList.add('hidden');nowPlaying.classList.remove('hidden');trackName.textContent=msg.base;}if(msg.base&&msg.base!==currentBase){currentBase=msg.base;haveMetadata=false;audio.playbackRate=1.0;audio.src=msg.mp3_url||"";audio.load();}if(msg.state==="stop"){audio.pause();audio.currentTime=0;audio.playbackRate=1.0;return;}if(msg.state==="pause"){audio.pause();audio.playbackRate=1.0;return;}const nowMs=Date.now();let serverMs=Number(msg.server_ms);if(!Number.isFinite(serverMs)||serverMs<1000000000000||Math.abs(nowMs-serverMs)>5*60*1000){serverMs=nowMs;}const smoothPosMs=Number(msg.pos_ms||0)+(nowMs-serverMs);const targetSec=smoothPosMs/1000.0;const localSec=audio.currentTime||0;const errMs=(targetSec-localSec)*1000.0;localEl.textContent=Math.round(localSec*1000);errEl.textContent=Math.round(errMs);if(audio.paused)await safePlay();if(!haveMetadata||!Number.isFinite(audio.duration)||audio.duration<=0){audio.playbackRate=1.0;return;}if(Math.abs(errMs)>1000){audio.currentTime=Math.max(0,Math.min(audio.duration-0.05,targetSec));audio.playbackRate=1.0;return;}if(Math.abs(errMs)<60){audio.playbackRate=1.0;}else{audio.playbackRate=clamp(1.0+(errMs*0.000002),0.997,1.003);}}
+
+</script>
+
+</body>
+
+</html>
